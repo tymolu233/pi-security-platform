@@ -1,0 +1,74 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN useradd -m -s /bin/bash analyst
+
+# 基础工具
+RUN apt-get update && apt-get install -y \
+    gdb strace ltrace file binutils \
+    python3 python3-pip python3-venv \
+    curl wget netcat-openbsd \
+    vim nano git \
+    jq unzip p7zip-full \
+    libgmp-dev libssl-dev libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# sudo (单独安装避免冲突)
+RUN apt-get update && apt-get install -y sudo && \
+    echo "analyst ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    rm -rf /var/lib/apt/lists/*
+
+# 逆向/取证工具
+RUN apt-get update && apt-get install -y \
+    upx-ucl \
+    binwalk foremost \
+    tshark \
+    && rm -rf /var/lib/apt/lists/*
+
+# QEMU
+RUN apt-get update && apt-get install -y \
+    qemu-system-x86 qemu-user-static \
+    && rm -rf /var/lib/apt/lists/*
+
+# Ruby
+RUN apt-get update && apt-get install -y ruby ruby-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# radare2
+RUN wget -qO /tmp/r2.deb https://github.com/radareorg/radare2/releases/download/6.1.4/radare2_6.1.4_amd64.deb \
+    && dpkg -i /tmp/r2.deb && rm /tmp/r2.deb
+
+# Python 工具
+RUN pip3 install --no-cache-dir \
+    r2pipe frida-tools capstone unicorn keystone-engine \
+    pwntools ropper ROPgadget \
+    pycryptodome z3-solver sympy gmpy2 \
+    angr lief \
+    requests beautifulsoup4 \
+    yara-python pefile oletools uncompyle6 qiling \
+    && rm -rf /root/.cache
+
+# Ruby gems
+RUN gem install one_gadget seccomp-tools
+
+# 复制工具脚本
+COPY recon.sh /opt/scripts/recon.sh
+COPY write_json.py /opt/scripts/write_json.py
+RUN chmod +x /opt/scripts/recon.sh /opt/scripts/write_json.py && \
+    ln -s /opt/scripts/write_json.py /usr/local/bin/write_json
+
+# GDB ptrace 权限
+RUN echo "kernel.yama.ptrace_scope = 0" >> /etc/sysctl.conf && \
+    echo "kernel.randomize_va_space = 0" >> /etc/sysctl.conf
+
+# pwndbg
+RUN git clone --depth 1 https://github.com/pwndbg/pwndbg /opt/pwndbg && \
+    cd /opt/pwndbg && ./setup.sh && \
+    echo "source /opt/pwndbg/gdbinit.py" >> /home/analyst/.gdbinit && \
+    chown analyst:analyst /home/analyst/.gdbinit
+
+USER analyst
+WORKDIR /workspace
+
+CMD ["bash"]

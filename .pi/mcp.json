@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "ida-multi-mcp": {
+      "command": "",
+      "args": [
+        "-m",
+        "ida_multi_mcp"
+      ],
+      "lifecycle": "lazy",
+      "idleTimeout": 30,
+      "directTools": true
+    }
+  }
+}

@@ -1,0 +1,4 @@
+.security-workspace/
+node_modules/
+*.log
+.pi/npm/

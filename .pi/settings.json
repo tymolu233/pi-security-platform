@@ -1,0 +1,72 @@
+{
+  "enableSkillCommands": true,
+  "extensions": [
+    "./extensions/security-platform/index.ts"
+  ],
+  "skills": [
+    "./skills"
+  ],
+  "prompts": [
+    "./prompts"
+  ],
+  "packages": [
+    {
+      "source": "npm:pi-subagents"
+    },
+    {
+      "source": "npm:pi-mcp-adapter"
+    },
+    {
+      "source": "npm:pi-web-access"
+    }
+  ],
+  "subagents": {
+    "agents": {
+      "re-triage": {
+        "description": "Fast RE triage — quick wins + escalation decision (2-5 min)",
+        "skills": ["ctf-reverse"],
+        "tools": ["sandbox_init", "sandbox_exec", "read", "mcp:ida-multi-mcp"]
+      },
+      "re-static": {
+        "description": "Heavy static RE — decompile, deobfuscate, custom VM lifting",
+        "skills": ["ctf-reverse", "radare2", "rev-struct", "rev-symbol"],
+        "tools": ["sandbox_init", "sandbox_exec", "sandbox_install", "read", "write", "mcp:ida-multi-mcp"]
+      },
+      "re-dynamic": {
+        "description": "Runtime RE — debug/trace/hook/emulate",
+        "skills": ["ctf-reverse"],
+        "tools": ["sandbox_init", "sandbox_exec", "sandbox_install", "read", "write", "mcp:ida-multi-mcp"]
+      },
+      "re-symbolic": {
+        "description": "Symbolic execution & SMT — angr/z3 for complex flag checkers",
+        "skills": ["ctf-reverse"],
+        "tools": ["sandbox_init", "sandbox_exec", "sandbox_install", "read", "write", "mcp:ida-multi-mcp"]
+      },
+      "pwn-exploit": {
+        "description": "Exploit development — pwntools, ROP, heap, format string",
+        "skills": ["ctf-pwn", "radare2"],
+        "tools": ["sandbox_init", "sandbox_exec", "sandbox_install", "read", "write", "mcp:ida-multi-mcp"]
+      },
+      "web-pentester": {
+        "description": "Web application security tester",
+        "skills": ["ctf-web", "ctf-osint"],
+        "tools": ["security_dispatch"]
+      },
+      "crypto-analyst": {
+        "description": "Cryptography analysis specialist",
+        "skills": ["ctf-crypto"],
+        "tools": ["sandbox_init", "sandbox_exec"]
+      },
+      "recon-specialist": {
+        "description": "Reconnaissance and OSINT specialist",
+        "skills": ["ctf-osint", "ctf-misc"],
+        "tools": ["security_dispatch"]
+      },
+      "forensics-analyst": {
+        "description": "Digital forensics and malware analyst",
+        "skills": ["ctf-forensics", "ctf-malware"],
+        "tools": ["sandbox_init", "sandbox_exec"]
+      }
+    }
+  }
+}
