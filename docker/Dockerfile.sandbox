@@ -9,12 +9,13 @@ RUN apt-get update && apt-get install -y \
     gdb strace ltrace file binutils \
     python3 python3-pip python3-venv \
     curl wget netcat-openbsd \
-    vim nano git \
+    vim nano git ca-certificates \
     jq unzip p7zip-full \
     libgmp-dev libssl-dev libffi-dev \
+    nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-# sudo (单独安装避免冲突)
+# sudo（单独安装避免冲突）
 RUN apt-get update && apt-get install -y sudo && \
     echo "analyst ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     rm -rf /var/lib/apt/lists/*
@@ -24,6 +25,17 @@ RUN apt-get update && apt-get install -y \
     upx-ucl \
     binwalk foremost \
     tshark \
+    && rm -rf /var/lib/apt/lists/*
+
+# ===== Web 测试工具 (apt) =====
+RUN apt-get update && apt-get install -y \
+    nmap \
+    whois \
+    dnsutils \
+    nikto \
+    gobuster \
+    default-jdk \
+    hashcat \
     && rm -rf /var/lib/apt/lists/*
 
 # QEMU
@@ -39,6 +51,27 @@ RUN apt-get update && apt-get install -y ruby ruby-dev && \
 RUN wget -qO /tmp/r2.deb https://github.com/radareorg/radare2/releases/download/6.1.4/radare2_6.1.4_amd64.deb \
     && dpkg -i /tmp/r2.deb && rm /tmp/r2.deb
 
+# ===== Go + Go Web 工具 =====
+RUN apt-get update && apt-get install -y golang-go && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV GOPATH=/home/analyst/go
+ENV PATH="/home/analyst/go/bin:${PATH}"
+
+RUN go install -v github.com/ffuf/ffuf/v2@latest && \
+    go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
+    go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
+    go install -v github.com/projectdiscovery/katana/cmd/katana@latest && \
+    go install -v github.com/hahwul/dalfox/v2@latest && \
+    go install -v github.com/trufflesecurity/trufflehog/v3@latest && \
+    go install -v github.com/sa7mon/S3Scanner@latest
+
+# ===== Java 反序列化工具 =====
+RUN wget -qO /opt/ysoserial.jar https://github.com/frohoff/ysoserial/releases/download/v0.0.6/ysoserial-0.0.6-all.jar && \
+    echo '#!/bin/bash' > /usr/local/bin/ysoserial && \
+    echo 'java -jar /opt/ysoserial.jar "$@"' >> /usr/local/bin/ysoserial && \
+    chmod +x /usr/local/bin/ysoserial
+
 # Python 工具
 RUN pip3 install --no-cache-dir \
     r2pipe frida-tools capstone unicorn keystone-engine \
@@ -47,7 +80,11 @@ RUN pip3 install --no-cache-dir \
     angr lief \
     requests beautifulsoup4 \
     yara-python pefile oletools uncompyle6 qiling \
+    sqlmap flask-unsign \
     && rm -rf /root/.cache
+
+# nuclei 模板（首次使用前更新）
+RUN nuclei -update-templates -silent 2>/dev/null || true
 
 # Ruby gems
 RUN gem install one_gadget seccomp-tools
@@ -67,6 +104,9 @@ RUN git clone --depth 1 https://github.com/pwndbg/pwndbg /opt/pwndbg && \
     cd /opt/pwndbg && ./setup.sh && \
     echo "source /opt/pwndbg/gdbinit.py" >> /home/analyst/.gdbinit && \
     chown analyst:analyst /home/analyst/.gdbinit
+
+# Fix Go tools permissions
+RUN chown -R analyst:analyst /home/analyst/go
 
 USER analyst
 WORKDIR /workspace
