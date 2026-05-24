@@ -71,10 +71,13 @@ RUN go install -v github.com/trufflesecurity/trufflehog/v3@latest || true
 RUN go install -v github.com/sa7mon/S3Scanner@latest || true
 
 # ===== Java 反序列化工具 =====
-RUN wget -qO /opt/ysoserial.jar https://github.com/frohoff/ysoserial/releases/download/v0.0.6/ysoserial-0.0.6-all.jar && \
-    echo '#!/bin/bash' > /usr/local/bin/ysoserial && \
-    echo 'java -jar /opt/ysoserial.jar "$@"' >> /usr/local/bin/ysoserial && \
-    chmod +x /usr/local/bin/ysoserial
+RUN set -e; \
+    if wget -qO /opt/ysoserial.jar https://github.com/frohoff/ysoserial/releases/download/v0.0.6/ysoserial-0.0.6-all.jar; then \
+      printf '#!/bin/bash\njava -jar /opt/ysoserial.jar "$@"\n' > /usr/local/bin/ysoserial && \
+      chmod +x /usr/local/bin/ysoserial; \
+    else \
+      echo "ysoserial download failed (404) — install manually if needed"; \
+    fi
 
 # Python 工具
 RUN pip3 install --no-cache-dir \
