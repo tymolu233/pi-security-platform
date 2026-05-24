@@ -1,85 +1,186 @@
+# syntax=docker/dockerfile:1
+# ============================================================
+# Stage 1: Go 工具编译
+# ============================================================
+FROM ubuntu:22.04 AS go-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates wget git && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN wget -qO /tmp/go.tar.gz https://go.dev/dl/go1.22.10.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm /tmp/go.tar.gz
+
+ENV GOPATH=/opt/go
+ENV PATH="/usr/local/go/bin:/opt/go/bin:${PATH}"
+
+RUN mkdir -p /opt/go /opt/go-tools && \
+    go install -v github.com/ffuf/ffuf/v2@latest && \
+    go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
+    go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
+    go install -v github.com/projectdiscovery/katana/cmd/katana@latest && \
+    go install -v github.com/hahwul/dalfox/v2@latest && \
+    cp /opt/go/bin/* /opt/go-tools/
+
+RUN go install -v github.com/trufflesecurity/trufflehog/v3@latest && \
+    cp /opt/go/bin/trufflehog /opt/go-tools/ 2>/dev/null || true
+
+RUN go install -v github.com/sa7mon/S3Scanner@latest && \
+    cp /opt/go/bin/S3Scanner /opt/go-tools/ 2>/dev/null || true
+
+# ============================================================
+# Stage 2: Rust 工具编译
+# ============================================================
+FROM ubuntu:22.04 AS rust-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+RUN cargo install rustfilt && \
+    cp /root/.cargo/bin/rustfilt /opt/rustfilt
+
+RUN cargo install cargo-bloat && \
+    cp /root/.cargo/bin/cargo-bloat /opt/cargo-bloat 2>/dev/null || true
+
+# ============================================================
+# Stage 3: 最终镜像
+# ============================================================
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN useradd -m -s /bin/bash analyst
 
-# 基础工具
-RUN apt-get update && apt-get install -y \
+# ============================================================
+# 基础工具 + 编译依赖 + sudo
+# ============================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gdb strace ltrace file binutils \
     python3 python3-pip python3-venv \
-    curl wget netcat-openbsd \
-    vim nano git ca-certificates \
+    curl wget netcat-openbsd ca-certificates \
+    vim nano git \
     jq unzip p7zip-full \
     libgmp-dev libssl-dev libffi-dev \
     nodejs npm \
-    && rm -rf /var/lib/apt/lists/*
-
-# sudo（单独安装避免冲突）
-RUN apt-get update && apt-get install -y sudo && \
-    echo "analyst ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    cmake g++ make \
+    sudo \
+    && echo "analyst ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     rm -rf /var/lib/apt/lists/*
 
-# 逆向/取证工具
-RUN apt-get update && apt-get install -y \
-    upx-ucl \
-    binwalk foremost \
-    tshark \
+# ============================================================
+# 取证工具 (apt)
+# ============================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    upx-ucl binwalk foremost tshark \
+    sleuthkit scalpel \
+    testdisk john \
+    ffmpeg steghide \
+    libimage-exiftool-perl imagemagick \
+    pcapfix qrencode \
     && rm -rf /var/lib/apt/lists/*
 
-# ===== Web 测试工具 (apt) =====
-RUN apt-get update && apt-get install -y \
-    nmap \
-    whois \
-    dnsutils \
-    nikto \
-    gobuster \
-    default-jdk \
-    hashcat \
+# ============================================================
+# Web 测试工具 (apt)
+# ============================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nmap whois dnsutils nikto gobuster hashcat \
+    openjdk-17-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
-# QEMU
-RUN apt-get update && apt-get install -y \
+# ============================================================
+# 多架构交叉编译 / 调试 (gdb-multiarch, ARM cross GCC)
+# ============================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gdb-multiarch \
+    gcc-arm-linux-gnueabihf \
+    gcc-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================================
+# QEMU（RE 必需）
+# ============================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
     qemu-system-x86 qemu-user-static \
     && rm -rf /var/lib/apt/lists/*
 
-# Ruby
-RUN apt-get update && apt-get install -y ruby ruby-dev && \
+# ============================================================
+# 密码学工具 (apt)
+# ============================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    hashpump && \
     rm -rf /var/lib/apt/lists/*
 
+# ============================================================
+# Ruby + APK 逆向工具
+# ============================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ruby ruby-dev apktool && \
+    rm -rf /var/lib/apt/lists/*
+
+# ============================================================
 # radare2
+# ============================================================
 RUN wget -qO /tmp/r2.deb https://github.com/radareorg/radare2/releases/download/6.1.4/radare2_6.1.4_amd64.deb \
     && dpkg -i /tmp/r2.deb && rm /tmp/r2.deb
 
-# ===== Go 1.22（官方 tarball，不用 apt 的 1.18） =====
-RUN wget -qO /tmp/go.tar.gz https://go.dev/dl/go1.22.10.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf /tmp/go.tar.gz && \
-    rm /tmp/go.tar.gz
+# ============================================================
+# Go 工具二进制（从 Stage 1 复制，不带 SDK）
+# ============================================================
+COPY --from=go-builder /opt/go-tools/* /usr/local/bin/
 
-ENV GOPATH=/home/analyst/go
-ENV PATH="/usr/local/go/bin:/home/analyst/go/bin:${PATH}"
+# ============================================================
+# Rust 工具二进制（从 Stage 2 复制，不带 toolchain）
+# ============================================================
+COPY --from=rust-builder /opt/rustfilt /usr/local/bin/rustfilt
+COPY --from=rust-builder /opt/cargo-bloat /usr/local/bin/cargo-bloat
 
-# 核心 Go Web 工具
-RUN go install -v github.com/ffuf/ffuf/v2@latest && \
-    go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
-    go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
-    go install -v github.com/projectdiscovery/katana/cmd/katana@latest && \
-    go install -v github.com/hahwul/dalfox/v2@latest
+# nuclei 模板
+RUN nuclei -update-templates -silent 2>/dev/null || true
 
-# 辅助工具（安装失败不影响构建）
-RUN go install -v github.com/trufflesecurity/trufflehog/v3@latest || true
-RUN go install -v github.com/sa7mon/S3Scanner@latest || true
-
-# ===== Java 反序列化工具 =====
-RUN set -e; \
-    if wget -qO /opt/ysoserial.jar https://github.com/frohoff/ysoserial/releases/download/v0.0.6/ysoserial-0.0.6-all.jar; then \
-      printf '#!/bin/bash\njava -jar /opt/ysoserial.jar "$@"\n' > /usr/local/bin/ysoserial && \
+# ============================================================
+# ysoserial / jadx (Java 工具，需 JDK 运行时)
+# ============================================================
+RUN if wget -qO /opt/ysoserial.jar https://github.com/frohoff/ysoserial/releases/download/v0.0.6/ysoserial-0.0.6-all.jar; then \
+      printf '#!/bin/sh\njava -jar /opt/ysoserial.jar "$$@"\n' > /usr/local/bin/ysoserial && \
       chmod +x /usr/local/bin/ysoserial; \
     else \
-      echo "ysoserial download failed (404) — install manually if needed"; \
+      echo "ysoserial download failed — install manually if needed"; \
     fi
 
-# Python 工具
+RUN wget -qO /tmp/jadx.zip https://github.com/skylot/jadx/releases/download/v1.5.1/jadx-1.5.1.zip && \
+    unzip -q /tmp/jadx.zip -d /opt/jadx && \
+    rm /tmp/jadx.zip && \
+    ln -sf /opt/jadx/bin/jadx /usr/local/bin/jadx && \
+    ln -sf /opt/jadx/bin/jadx-gui /usr/local/bin/jadx-gui
+
+# ============================================================
+# pycdc — Python 3.9+ 反编译器 (手动编译)
+# ============================================================
+RUN git clone --depth 1 https://github.com/zrax/pycdc /tmp/pycdc 2>/dev/null && \
+    cd /tmp/pycdc && cmake . && make -j$(nproc) 2>/dev/null && \
+    cp pycdc /usr/local/bin/ && \
+    cp pycdas /usr/local/bin/ 2>/dev/null || true && \
+    rm -rf /tmp/pycdc
+
+# ============================================================
+# RsaCtfTool（容错）
+# ============================================================
+RUN git clone --depth 1 https://github.com/RsaCtfTool/RsaCtfTool /opt/RsaCtfTool 2>/dev/null && \
+    pip3 install -r /opt/RsaCtfTool/requirements.txt 2>/dev/null || true && \
+    ln -sf /opt/RsaCtfTool/RsaCtfTool.py /usr/local/bin/rsactftool 2>/dev/null || true
+
+# ============================================================
+# Python 工具 — 核心包
+# ============================================================
 RUN pip3 install --no-cache-dir \
     r2pipe frida-tools capstone unicorn keystone-engine \
     pwntools ropper ROPgadget \
@@ -88,32 +189,74 @@ RUN pip3 install --no-cache-dir \
     requests beautifulsoup4 \
     yara-python pefile oletools uncompyle6 qiling \
     sqlmap flask-unsign \
-    && rm -rf /root/.cache
+    volatility3 Pillow numpy matplotlib \
+    fonttools \
+    hashpumpy py_ecc owiener roca-detect \
+    dnslib shodan \
+    stego-lsb apng heatshrink2 \
+    pyzbar base65536 ssh-audit \
+    padding-oracle
 
-# nuclei 模板（首次使用前更新）
-RUN nuclei -update-templates -silent 2>/dev/null || true
+# ============================================================
+# Python 工具 — 编译/依赖重型的（可能失败，单独容错）
+# ============================================================
+RUN pip3 install --no-cache-dir triton || true
+RUN pip3 install --no-cache-dir fpylll || true
+RUN pip3 install --no-cache-dir simba-simplifier || true
+RUN pip3 install --no-cache-dir FSEventsParser smspdu dissect.cobaltstrike || true
+RUN pip3 install --no-cache-dir retdec-decompiler || true
 
+# ============================================================
+# npm 全局工具
+# ============================================================
+RUN npm install -g @electron/asar base65536 && npm cache clean --force 2>/dev/null || true
+
+# ============================================================
 # Ruby gems
-RUN gem install one_gadget seccomp-tools
+# ============================================================
+RUN gem install one_gadget seccomp-tools zsteg && \
+    rm -rf /home/analyst/.gem /var/lib/gems/*/cache
 
+# ============================================================
+# pwndbg
+# ============================================================
+RUN git clone --depth 1 https://github.com/pwndbg/pwndbg /opt/pwndbg && \
+    cd /opt/pwndbg && ./setup.sh && \
+    echo "source /opt/pwndbg/gdbinit.py" >> /home/analyst/.gdbinit && \
+    chown analyst:analyst /home/analyst/.gdbinit && \
+    rm -rf /opt/pwndbg/.git
+
+# ============================================================
 # 复制工具脚本
+# ============================================================
 COPY recon.sh /opt/scripts/recon.sh
 COPY write_json.py /opt/scripts/write_json.py
 RUN chmod +x /opt/scripts/recon.sh /opt/scripts/write_json.py && \
     ln -s /opt/scripts/write_json.py /usr/local/bin/write_json
 
+# ============================================================
 # GDB ptrace 权限
+# ============================================================
 RUN echo "kernel.yama.ptrace_scope = 0" >> /etc/sysctl.conf && \
     echo "kernel.randomize_va_space = 0" >> /etc/sysctl.conf
 
-# pwndbg
-RUN git clone --depth 1 https://github.com/pwndbg/pwndbg /opt/pwndbg && \
-    cd /opt/pwndbg && ./setup.sh && \
-    echo "source /opt/pwndbg/gdbinit.py" >> /home/analyst/.gdbinit && \
-    chown analyst:analyst /home/analyst/.gdbinit
+# ============================================================
+# 统一清理
+# ============================================================
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+           /usr/share/doc /usr/share/man /usr/share/info \
+           /usr/share/locale /usr/share/zoneinfo/right \
+           /root/.cache /home/analyst/.cache \
+           /var/cache/apt /var/cache/debconf \
+           /usr/lib/python3.*/__pycache__ \
+           /opt/RsaCtfTool/.git \
+    && npm cache clean --force 2>/dev/null || true \
+    && find /usr/lib/python3 -name '*.pyc' -delete 2>/dev/null || true \
+    && find /usr/lib/python3 -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true \
+    && find /opt/RsaCtfTool -name '.git' -type d -exec rm -rf {} + 2>/dev/null || true
 
-# Fix Go tools permissions
-RUN chown -R analyst:analyst /home/analyst/go
+RUN chown -R analyst:analyst /home/analyst /opt/scripts /opt/RsaCtfTool 2>/dev/null || true
 
 USER analyst
 WORKDIR /workspace
