@@ -51,20 +51,24 @@ RUN apt-get update && apt-get install -y ruby ruby-dev && \
 RUN wget -qO /tmp/r2.deb https://github.com/radareorg/radare2/releases/download/6.1.4/radare2_6.1.4_amd64.deb \
     && dpkg -i /tmp/r2.deb && rm /tmp/r2.deb
 
-# ===== Go + Go Web 工具 =====
-RUN apt-get update && apt-get install -y golang-go && \
-    rm -rf /var/lib/apt/lists/*
+# ===== Go 1.22（官方 tarball，不用 apt 的 1.18） =====
+RUN wget -qO /tmp/go.tar.gz https://go.dev/dl/go1.22.10.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm /tmp/go.tar.gz
 
 ENV GOPATH=/home/analyst/go
-ENV PATH="/home/analyst/go/bin:${PATH}"
+ENV PATH="/usr/local/go/bin:/home/analyst/go/bin:${PATH}"
 
+# 核心 Go Web 工具
 RUN go install -v github.com/ffuf/ffuf/v2@latest && \
     go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
     go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
     go install -v github.com/projectdiscovery/katana/cmd/katana@latest && \
-    go install -v github.com/hahwul/dalfox/v2@latest && \
-    go install -v github.com/trufflesecurity/trufflehog/v3@latest && \
-    go install -v github.com/sa7mon/S3Scanner@latest
+    go install -v github.com/hahwul/dalfox/v2@latest
+
+# 辅助工具（安装失败不影响构建）
+RUN go install -v github.com/trufflesecurity/trufflehog/v3@latest || true
+RUN go install -v github.com/sa7mon/S3Scanner@latest || true
 
 # ===== Java 反序列化工具 =====
 RUN wget -qO /opt/ysoserial.jar https://github.com/frohoff/ysoserial/releases/download/v0.0.6/ysoserial-0.0.6-all.jar && \
