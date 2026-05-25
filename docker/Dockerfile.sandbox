@@ -113,13 +113,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================================
-# 密码学工具 (apt)
-# ============================================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    hashpump && \
-    rm -rf /var/lib/apt/lists/*
-
-# ============================================================
 # Ruby + APK 逆向工具
 # ============================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
