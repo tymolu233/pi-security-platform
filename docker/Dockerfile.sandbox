@@ -194,7 +194,7 @@ RUN pip3 install --no-cache-dir \
 # Python 工具 — 密码学
 # ============================================================
 RUN pip3 install --no-cache-dir \
-    hashpumpy py_ecc owiener roca-detect
+    py_ecc owiener roca-detect
 
 # ============================================================
 # Python 工具 — 编译/依赖重型的（可能失败，单独容错）
@@ -202,6 +202,7 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 install --no-cache-dir triton || true
 RUN pip3 install --no-cache-dir fpylll || true
 RUN pip3 install --no-cache-dir simba-simplifier || true
+RUN pip3 install --no-cache-dir hashpumpy || true
 RUN pip3 install --no-cache-dir stego-lsb || true
 RUN pip3 install --no-cache-dir apng heatshrink2 || true
 RUN pip3 install --no-cache-dir base65536 padding-oracle || true
