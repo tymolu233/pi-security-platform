@@ -172,7 +172,7 @@ RUN git clone --depth 1 https://github.com/RsaCtfTool/RsaCtfTool /opt/RsaCtfTool
     ln -sf /opt/RsaCtfTool/RsaCtfTool.py /usr/local/bin/rsactftool 2>/dev/null || true
 
 # ============================================================
-# Python 工具 — 核心包
+# Python 工具 — 核心包（验证过可装）
 # ============================================================
 RUN pip3 install --no-cache-dir \
     r2pipe frida-tools capstone unicorn keystone-engine \
@@ -181,14 +181,20 @@ RUN pip3 install --no-cache-dir \
     angr lief \
     requests beautifulsoup4 \
     yara-python pefile oletools uncompyle6 qiling \
-    sqlmap flask-unsign \
+    sqlmap flask-unsign
+
+# ============================================================
+# Python 工具 — 新增通用包
+# ============================================================
+RUN pip3 install --no-cache-dir \
     volatility3 Pillow numpy matplotlib \
-    fonttools \
-    hashpumpy py_ecc owiener roca-detect \
-    dnslib shodan \
-    stego-lsb apng heatshrink2 \
-    pyzbar base65536 ssh-audit \
-    padding-oracle
+    fonttools dnslib shodan pyzbar ssh-audit
+
+# ============================================================
+# Python 工具 — 密码学
+# ============================================================
+RUN pip3 install --no-cache-dir \
+    hashpumpy py_ecc owiener roca-detect
 
 # ============================================================
 # Python 工具 — 编译/依赖重型的（可能失败，单独容错）
@@ -196,6 +202,9 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 install --no-cache-dir triton || true
 RUN pip3 install --no-cache-dir fpylll || true
 RUN pip3 install --no-cache-dir simba-simplifier || true
+RUN pip3 install --no-cache-dir stego-lsb || true
+RUN pip3 install --no-cache-dir apng heatshrink2 || true
+RUN pip3 install --no-cache-dir base65536 padding-oracle || true
 RUN pip3 install --no-cache-dir FSEventsParser smspdu dissect.cobaltstrike || true
 RUN pip3 install --no-cache-dir retdec-decompiler || true
 
